@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：ReportMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.ReportMapper">
+
+    <resultMap id="ReportVoMap" type="com.sys.pro.vo.ReportVo">
+        <id column="id" property="id" />
+        <result column="reported_id" property="reportedId" />
+        <result column="report_type" property="reportType" />
+        <result column="user_id" property="userId" />
+        <result column="reason" property="reason" />
+        <result column="evidence_text" property="evidenceText" />
+        <result column="evidence_images" property="evidenceImages" />
+        <result column="status" property="status" />
+        <result column="reply" property="reply" />
+        <result column="appeal_content" property="appealContent" />
+        <result column="appeal_status" property="appealStatus" />
+        <result column="appeal_reply" property="appealReply" />
+        <result column="appeal_time" property="appealTime" />
+        <result column="appeal_review_time" property="appealReviewTime" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="deleted" property="deleted" />
+        <result column="reporter_nickname" property="reporterNickname" />
+        <result column="reported_user_id" property="reportedUserId" />
+        <result column="reported_username" property="reportedUsername" />
+        <result column="reported_nickname" property="reportedNickname" />
+        <result column="reported_avatar" property="reportedAvatar" />
+        <result column="reported_enable_flag" property="reportedEnableFlag" />
+        <result column="post_id" property="postId" />
+        <result column="post_title" property="postTitle" />
+        <result column="news_id" property="newsId" />
+        <result column="news_title" property="newsTitle" />
+        <result column="comment_content" property="commentContent" />
+        <result column="comment_create_time" property="commentCreateTime" />
+    </resultMap>
+
+    <sql id="ReportDetailColumns">
+        r.*,
+        reporter.nickname AS reporter_nickname,
+        CASE
+            WHEN r.report_type = 'USER' THEN user_target.id
+            WHEN r.report_type = 'NEWS_COMMENT' THEN news_comment_user.id
+            ELSE comment_user.id
+        END AS reported_user_id,
+        COALESCE(user_target.username, news_comment_user.username, comment_user.username) AS reported_username,
+        COALESCE(user_target_info.nickname, news_comment_target_info.nickname, comment_target_info.nickname) AS reported_nickname,
+        COALESCE(user_target_info.avatar, news_comment_target_info.avatar, comment_target_info.avatar) AS reported_avatar,
+        COALESCE(user_target.enable_flag, news_comment_user.enable_flag, comment_user.enable_flag) AS reported_enable_flag,
+        c.post_id,
+        COALESCE(p.title, n.title) AS post_title,
+        nc.news_id,
+        n.title AS news_title,
+        COALESCE(c.content, nc.content) AS comment_content,
+        COALESCE(c.create_time, nc.create_time) AS comment_create_time
+    </sql>
+
+    <sql id="AccountUnion">
+        SELECT id, username, enable_flag FROM t_player_user WHERE deleted = 0
+        UNION ALL
+        SELECT id, username, enable_flag FROM t_moderator_user WHERE deleted = 0
+        UNION ALL
+        SELECT id, username, enable_flag FROM t_admin_user WHERE deleted = 0
+    </sql>
+
+    <sql id="ReportJoins">
+        LEFT JOIN t_comment c ON r.report_type = 'COMMENT' AND r.reported_id = c.id
+        LEFT JOIN t_post p ON c.post_id = p.id
+        LEFT JOIN t_news_comment nc ON r.report_type = 'NEWS_COMMENT' AND r.reported_id = nc.id
+        LEFT JOIN t_news n ON nc.news_id = n.id
+        LEFT JOIN t_user_info reporter ON r.user_id = reporter.user_id
+        LEFT JOIN (
+            <include refid="AccountUnion" />
+        ) comment_user ON c.user_id = comment_user.id
+        LEFT JOIN t_user_info comment_target_info ON c.user_id = comment_target_info.user_id
+        LEFT JOIN (
+            <include refid="AccountUnion" />
+        ) news_comment_user ON nc.user_id = news_comment_user.id
+        LEFT JOIN t_user_info news_comment_target_info ON nc.user_id = news_comment_target_info.user_id
+        LEFT JOIN (
+            <include refid="AccountUnion" />
+        ) user_target ON r.report_type = 'USER' AND r.reported_id = user_target.id
+        LEFT JOIN t_user_info user_target_info ON r.report_type = 'USER' AND r.reported_id = user_target_info.user_id
+    </sql>
+
+    <select id="selectReportPage" resultMap="ReportVoMap">
+        SELECT
+        <include refid="ReportDetailColumns" />
+        FROM t_report r
+        <include refid="ReportJoins" />
+        <where>
+            r.deleted = 0
+            <if test="param.status != null and param.status != '' and param.status == 'MUTED'">
+                AND r.status LIKE 'MUTE:%'
+            </if>
+            <if test="param.status != null and param.status != '' and param.status == 'BANNED'">
+                AND (r.status = 'BANNED' OR r.status LIKE 'BAN:%')
+            </if>
+            <if test="param.status != null and param.status != '' and param.status == 'PENDING'">
+                AND (r.status = 'PENDING' OR r.status IS NULL OR r.appeal_status = 'PENDING')
+            </if>
+            <if test="param.status != null and param.status != '' and param.status != 'MUTED' and param.status != 'BANNED' and param.status != 'PENDING'">
+                AND r.status = #{param.status}
+            </if>
+            <if test="param.reportType != null and param.reportType != ''">
+                AND r.report_type = #{param.reportType}
+            </if>
+            <if test="param.userId != null">
+                AND r.user_id = #{param.userId}
+            </if>
+            <if test="param.reportedUserId != null">
+                AND (
+                    (r.report_type = 'USER' AND r.reported_id = #{param.reportedUserId})
+                    OR (r.report_type = 'COMMENT' AND c.user_id = #{param.reportedUserId})
+                    OR (r.report_type = 'NEWS_COMMENT' AND nc.user_id = #{param.reportedUserId})
+                )
+            </if>
+            <if test="param.reportedKeyword != null and param.reportedKeyword != ''">
+                AND (
+                    COALESCE(user_target.username, news_comment_user.username, comment_user.username) LIKE CONCAT('%', #{param.reportedKeyword}, '%')
+                    OR COALESCE(user_target_info.nickname, news_comment_target_info.nickname, comment_target_info.nickname) LIKE CONCAT('%', #{param.reportedKeyword}, '%')
+                )
+            </if>
+        </where>
+        ORDER BY r.create_time DESC
+    </select>
+
+    <select id="selectReportDetail" resultMap="ReportVoMap">
+        SELECT
+        <include refid="ReportDetailColumns" />
+        FROM t_report r
+        <include refid="ReportJoins" />
+        WHERE r.id = #{id}
+        AND r.deleted = 0
+    </select>
+
+    <select id="selectLatestPunishmentByUserId" resultMap="ReportVoMap">
+        SELECT
+        <include refid="ReportDetailColumns" />
+        FROM t_report r
+        <include refid="ReportJoins" />
+        WHERE r.deleted = 0
+        AND (
+            (r.report_type = 'USER' AND r.reported_id = #{userId})
+            OR (r.report_type = 'COMMENT' AND c.user_id = #{userId})
+            OR (r.report_type = 'NEWS_COMMENT' AND nc.user_id = #{userId})
+        )
+        AND (
+            r.status = 'BANNED'
+            OR r.status LIKE 'BAN:%'
+            OR r.status LIKE 'MUTE:%'
+        )
+        ORDER BY r.update_time DESC, r.create_time DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectMuteReportsByUserId" resultType="com.sys.pro.pojo.Report">
+        SELECT r.*
+        FROM t_report r
+        LEFT JOIN t_comment c ON r.report_type = 'COMMENT' AND r.reported_id = c.id
+        LEFT JOIN t_news_comment nc ON r.report_type = 'NEWS_COMMENT' AND r.reported_id = nc.id
+        WHERE (
+            (r.report_type = 'USER' AND r.reported_id = #{userId})
+            OR (r.report_type = 'COMMENT' AND c.user_id = #{userId})
+            OR (r.report_type = 'NEWS_COMMENT' AND nc.user_id = #{userId})
+        )
+        AND r.deleted = 0
+        AND r.status LIKE 'MUTE:%'
+    </select>
+
+    <update id="unmuteActiveReportsByUserId">
+        UPDATE t_report r
+        LEFT JOIN t_comment c ON r.report_type = 'COMMENT' AND r.reported_id = c.id
+        LEFT JOIN t_news_comment nc ON r.report_type = 'NEWS_COMMENT' AND r.reported_id = nc.id
+        SET r.status = #{status},
+            r.reply = #{reply},
+            r.update_time = #{updateTime}
+        WHERE (
+            (r.report_type = 'USER' AND r.reported_id = #{userId})
+            OR (r.report_type = 'COMMENT' AND c.user_id = #{userId})
+            OR (r.report_type = 'NEWS_COMMENT' AND nc.user_id = #{userId})
+        )
+        AND r.deleted = 0
+        AND r.status LIKE 'MUTE:%'
+    </update>
+
+</mapper>

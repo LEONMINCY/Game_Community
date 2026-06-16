@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!--
+  评论 Mapper 映射文件。
+  这里集中维护帖子评论、回复评论以及“我的评论”列表查询，附带用户信息、回复数和点赞状态。
+-->
+<mapper namespace="com.sys.pro.mapper.CommentMapper">
+
+    <!-- 评论实体基础字段映射，供 MyBatis-Plus 扩展查询复用。 -->
+    <resultMap id="BaseResultMap" type="com.sys.pro.pojo.Comment">
+        <id column="id" property="id" />
+        <result column="post_id" property="postId" />
+        <result column="user_id" property="userId" />
+        <result column="content" property="content" />
+        <result column="image_url" property="imageUrl" />
+        <result column="likes_user" property="likesUser" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="deleted" property="deleted" />
+        <result column="parent_id" property="parentId" />
+        <result column="reply_user_id" property="replyUserId" />
+    </resultMap>
+
+    <!-- 评论列表返回对象映射，额外携带作者、回复对象、点赞数和当前用户点赞状态。 -->
+    <resultMap id="CommentVoMap" type="com.sys.pro.vo.CommentVo">
+        <id column="id" property="id" />
+        <result column="post_id" property="postId" />
+        <result column="user_id" property="userId" />
+        <result column="content" property="content" />
+        <result column="image_url" property="imageUrl" />
+        <result column="likes_user" property="likesUser" />
+        <result column="likes" property="likes" />
+        <result column="is_liked" property="isLiked" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="deleted" property="deleted" />
+        <result column="parent_id" property="parentId" />
+        <result column="reply_user_id" property="replyUserId" />
+        <result column="nickname" property="nickname" />
+        <result column="avatar" property="avatar" />
+        <result column="user_level" property="userLevel" />
+        <result column="reply_user_nickname" property="replyUserNickname" />
+        <result column="post_title" property="postTitle" />
+        <result column="post_cover" property="postCover" />
+    </resultMap>
+
+    <!-- 通用点赞统计片段：likes_user 为空或历史默认 0 时按 0 处理。 -->
+    <sql id="CommentLikeCount">
+        CASE
+            WHEN c.likes_user IS NULL OR c.likes_user = '' OR c.likes_user = '0' THEN 0
+            ELSE LENGTH(c.likes_user) - LENGTH(REPLACE(c.likes_user, ',', '')) + 1
+        END AS likes
+    </sql>
+
+    <!-- 通用点赞状态片段：登录用户存在时才判断 FIND_IN_SET，游客统一返回未点赞。 -->
+    <sql id="CommentLikedFlag">
+        <choose>
+            <when test="param.currentUserId != null">
+                CASE WHEN FIND_IN_SET(#{param.currentUserId}, c.likes_user) > 0 THEN 1 ELSE 0 END AS is_liked
+            </when>
+            <otherwise>
+                0 AS is_liked
+            </otherwise>
+        </choose>
+    </sql>
+
+    <!-- 根据帖子ID分页获取一级评论，并附带前三条回复。 -->
+    <select id="getPageListByPostId" resultMap="CommentVoMap">
+        SELECT
+            c.*,
+            <include refid="CommentLikeCount" />,
+            <include refid="CommentLikedFlag" />,
+            CASE WHEN c.user_id = -100 THEN 'AI助手' ELSE u.nickname END AS nickname,
+            CASE WHEN c.user_id = -100 THEN '' ELSE u.avatar END AS avatar,
+            CASE WHEN c.user_id = -100 THEN 0 ELSE u.ex1 END AS user_level,
+            CASE WHEN c.reply_user_id = -100 THEN 'AI助手' ELSE ru.nickname END AS reply_user_nickname,
+            (SELECT COUNT(1) FROM t_comment rc WHERE rc.parent_id = c.id AND rc.deleted = 0) AS reply_count
+        FROM t_comment c
+        LEFT JOIN t_user_info u ON c.user_id = u.user_id
+        LEFT JOIN t_user_info ru ON c.reply_user_id = ru.user_id
+        WHERE c.post_id = #{param.postId}
+          AND c.deleted = 0
+        <if test="param.parentId != null">
+            AND c.parent_id = #{param.parentId}
+        </if>
+        <if test="param.parentId == null">
+            AND c.parent_id IS NULL
+        </if>
+        ORDER BY c.create_time DESC
+    </select>
+
+    <!-- 根据父评论ID分页获取回复列表。 -->
+    <select id="getPageListByParentId" resultMap="CommentVoMap">
+        SELECT
+            c.*,
+            <include refid="CommentLikeCount" />,
+            <include refid="CommentLikedFlag" />,
+            CASE WHEN c.user_id = -100 THEN 'AI助手' ELSE u.nickname END AS nickname,
+            CASE WHEN c.user_id = -100 THEN '' ELSE u.avatar END AS avatar,
+            CASE WHEN c.user_id = -100 THEN 0 ELSE u.ex1 END AS user_level,
+            CASE WHEN c.reply_user_id = -100 THEN 'AI助手' ELSE ru.nickname END AS reply_user_nickname
+        FROM t_comment c
+        LEFT JOIN t_user_info u ON c.user_id = u.user_id
+        LEFT JOIN t_user_info ru ON c.reply_user_id = ru.user_id
+        WHERE c.parent_id = #{param.parentId}
+          AND c.deleted = 0
+        ORDER BY c.create_time ASC
+    </select>
+
+    <!-- 查询当前用户发表过的评论，通知中心“我的评论”页签使用。 -->
+    <select id="getMyCommentList" resultMap="CommentVoMap">
+        SELECT
+            c.*,
+            <include refid="CommentLikeCount" />,
+            0 AS is_liked,
+            u.nickname,
+            u.avatar,
+            u.ex1 AS user_level,
+            CASE WHEN c.reply_user_id = -100 THEN 'AI助手' ELSE ru.nickname END AS reply_user_nickname,
+            p.title AS post_title,
+            p.media AS post_cover
+        FROM t_comment c
+        LEFT JOIN t_user_info u ON c.user_id = u.user_id
+        LEFT JOIN t_user_info ru ON c.reply_user_id = ru.user_id
+        LEFT JOIN t_post p ON c.post_id = p.id
+        WHERE c.user_id = #{userId}
+          AND c.deleted = 0
+        ORDER BY c.create_time DESC
+    </select>
+
+</mapper>

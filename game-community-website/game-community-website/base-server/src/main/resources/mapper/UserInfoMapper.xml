@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：UserInfoMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.UserInfoMapper">
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.sys.pro.pojo.UserInfo">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="nickname" property="nickname"/>
+        <result column="avatar" property="avatar"/>
+        <result column="phone" property="phone"/>
+        <result column="email" property="email"/>
+        <result column="gender" property="gender"/>
+        <result column="age" property="age"/>
+        <result column="address" property="address"/>
+        <result column="signature" property="signature"/>
+        <result column="ex1" property="ex1"/>
+        <result column="ex2" property="ex2"/>
+        <result column="deleted" property="deleted"/>
+        <result column="role_id" property="roleId"/>
+        <result column="username" property="username"/>
+        <collection property="permissions" ofType="string" >
+            <result column="role_name" />
+        </collection>
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id
+        , user_id, nickname, avatar, phone, gender, birthday, height, weight, deleted
+    </sql>
+
+    <sql id="AccountUnion">
+        SELECT id, username, role_id FROM t_player_user WHERE deleted = 0
+        UNION ALL
+        SELECT id, username, role_id FROM t_moderator_user WHERE deleted = 0
+        UNION ALL
+        SELECT id, username, role_id FROM t_admin_user WHERE deleted = 0
+    </sql>
+
+    <select id="getUserInfo" resultMap="BaseResultMap">
+        SELECT t3.*, t2.role_name, t2.id role_id, account.username
+        FROM (
+            <include refid="AccountUnion" />
+        ) account
+        JOIN t_role t2 ON account.role_id = t2.id
+        JOIN t_user_info t3 ON t3.user_id = account.id
+        WHERE account.id = #{userId}
+    </select>
+
+    <select id="searchUsers" resultMap="BaseResultMap">
+        SELECT COALESCE(t3.id, account.id) AS id,
+               account.id AS user_id,
+               COALESCE(NULLIF(t3.nickname, ''), account.username) AS nickname,
+               t3.avatar,
+               t3.ex1,
+               t3.ex2,
+               COALESCE(t3.deleted, 0) AS deleted,
+               account.role_id, account.username
+        FROM (
+            <include refid="AccountUnion" />
+        ) account
+        LEFT JOIN t_user_info t3 ON t3.user_id = account.id
+        WHERE COALESCE(t3.deleted, 0) = 0
+        <if test="keyword != null and keyword != ''">
+            AND (account.username LIKE CONCAT('%', #{keyword}, '%')
+              OR t3.nickname LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY COALESCE(t3.ex1, 0) DESC, account.id DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

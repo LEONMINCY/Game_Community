@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：NewsMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.NewsMapper">
+
+
+</mapper>

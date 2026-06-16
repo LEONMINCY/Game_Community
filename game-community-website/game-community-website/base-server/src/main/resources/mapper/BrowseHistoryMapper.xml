@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：BrowseHistoryMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.BrowseHistoryMapper">
+
+    <select id="getUserScores" resultType="java.util.Map">
+        SELECT
+            user_id,
+            target_id,
+            target_type,
+            SUM(score) AS total_score
+        FROM (
+                 SELECT
+                     user_id,
+                     target_id,
+                     target_type,
+                     CASE
+                         WHEN browse_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1.5
+                         WHEN browse_time >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN 1.0
+                         ELSE 0.4
+                     END AS score -- 浏览行为加入时间衰减，近期兴趣权重更高。
+                 FROM t_browse_history
+                 WHERE target_type = #{targetType}
+                   AND (deleted = 0 OR deleted IS NULL)
+
+                 UNION ALL
+
+                 SELECT
+                     t1.user_id,
+                     t2.game_id AS target_id,
+                     'game' as target_type,
+                     CASE
+                         WHEN t1.create_time >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 3.0
+                         WHEN t1.create_time >= DATE_SUB(NOW(), INTERVAL 180 DAY) THEN 2.0
+                         ELSE 1.0
+                     END AS score -- 评论说明用户对关联游戏有更强兴趣。
+                 FROM t_comment t1, t_post t2
+                 WHERE #{targetType} = 'game'
+                   AND t1.post_id = t2.id
+                   AND t2.game_id IS NOT NULL
+                   AND (t1.deleted = 0 OR t1.deleted IS NULL)
+                   AND (t2.deleted = 0 OR t2.deleted IS NULL)
+                   AND (t2.audit_status = 'approved' OR t2.audit_status IS NULL OR t2.audit_status = '')
+
+                 UNION ALL
+
+                 SELECT
+                     user_id,
+                     game_id AS target_id,
+                     'game' AS target_type,
+                     6 AS score -- 已购买游戏属于强偏好。
+                 FROM t_order
+                 WHERE #{targetType} = 'game'
+                   AND status = '购买成功'
+                   AND (deleted = 0 OR deleted IS NULL)
+
+                 UNION ALL
+
+                 SELECT
+                     user_id,
+                     game_id AS target_id,
+                     'game' AS target_type,
+                     CASE
+                         WHEN recommend = 0 THEN 0.5
+                         WHEN rating >= 9 THEN 5.0
+                         WHEN rating >= 7 THEN 4.0
+                         ELSE 2.0
+                     END AS score -- 好评和高分评价权重更高，差评仅保留弱兴趣。
+                 FROM t_game_rating
+                 WHERE #{targetType} = 'game'
+             ) AS combined_data
+        GROUP BY user_id, target_id, target_type
+    </select>
+</mapper>

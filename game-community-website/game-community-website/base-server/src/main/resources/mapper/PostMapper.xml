@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：PostMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.PostMapper">
+
+    <select id="selectPostPage" resultType="com.sys.pro.vo.PostPageVo">
+        SELECT
+            p.*,
+            g.name as game_name,
+            g.icon as game_icon,
+            u.nickname,
+            u.avatar as user_avatar,
+            u.ex1 as user_level,
+            CASE WHEN p.likes_user IS NULL OR p.likes_user = '' THEN 0 ELSE (LENGTH(p.likes_user) - LENGTH(REPLACE(p.likes_user, ',', '')) + 1) END as likes,
+            CASE WHEN p.favorites_user IS NULL OR p.favorites_user = '' THEN 0 ELSE (LENGTH(p.favorites_user) - LENGTH(REPLACE(p.favorites_user, ',', '')) + 1) END as favorites
+        FROM t_post p
+        LEFT JOIN t_game g ON p.game_id = g.id
+        LEFT JOIN t_user_info u ON p.user_id = u.user_id
+        <where>
+            p.deleted = 0
+            <if test="dto.title != null and dto.title != ''">
+                AND p.title LIKE CONCAT('%', #{dto.title}, '%')
+            </if>
+            <if test="dto.keyword != null and dto.keyword != ''">
+                AND (
+                    p.title LIKE CONCAT('%', #{dto.keyword}, '%')
+                    OR p.content LIKE CONCAT('%', #{dto.keyword}, '%')
+                    OR p.topics LIKE CONCAT('%', #{dto.keyword}, '%')
+                    OR g.name LIKE CONCAT('%', #{dto.keyword}, '%')
+                )
+            </if>
+            <if test="dto.topic != null and dto.topic != ''">
+                AND p.topics LIKE CONCAT('%', #{dto.topic}, '%')
+            </if>
+            <if test="dto.gameId != null">
+                AND p.game_id = #{dto.gameId}
+            </if>
+            <if test="dto.auditStatus != null and dto.auditStatus != ''">
+                AND p.audit_status = #{dto.auditStatus}
+            </if>
+            <if test="dto.appealStatus != null and dto.appealStatus != ''">
+                AND p.appeal_status = #{dto.appealStatus}
+            </if>
+            <if test="dto.startTime != null">
+                AND p.create_time >= #{dto.startTime}
+            </if>
+            <if test="dto.endTime != null">
+                AND p.create_time &lt;= #{dto.endTime}
+            </if>
+        </where>
+        ORDER BY p.create_time DESC
+    </select>
+
+    <!-- 获取用户收藏的帖子列表 -->
+    <select id="getFavoritesByUserId" resultType="com.sys.pro.vo.PostVo">
+        SELECT
+            p.*,
+            u.nickname,
+            u.avatar as userAvatar,
+            u.ex1 as userLevel,
+            g.name as gameName,
+            g.icon as gameIcon
+        FROM t_post p
+        LEFT JOIN t_user_info u ON p.user_id = u.user_id
+        LEFT JOIN t_game g ON p.game_id = g.id
+        WHERE p.deleted = 0
+        AND (p.audit_status = 'approved' OR p.audit_status IS NULL OR p.audit_status = '')
+        AND FIND_IN_SET(#{userId}, p.favorites_user)
+        ORDER BY p.create_time DESC
+    </select>
+
+</mapper>

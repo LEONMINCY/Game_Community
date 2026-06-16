@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 文件说明：MenuMapper 映射文件，维护对应 Mapper 的自定义 SQL 配置。 -->
+<mapper namespace="com.sys.pro.mapper.MenuMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.sys.pro.pojo.Menu">
+        <id column="id" property="id" />
+        <result column="icon" property="icon" />
+        <result column="index" property="index" />
+        <result column="title" property="title" />
+        <result column="created_time" property="createdTime" />
+        <result column="updated_time" property="updatedTime" />
+        <result column="deleted" property="deleted" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, icon, index, title, created_time, updated_time, deleted
+    </sql>
+
+    <select id="selectByRoleId" resultType="com.sys.pro.pojo.Menu">
+        select m.*
+        from t_menu m,t_role_menu rm
+        where m.id = rm.menu_id
+        and m.deleted = 0
+        and rm.role_id = #{roleId}
+        order by m.sort
+    </select>
+
+</mapper>

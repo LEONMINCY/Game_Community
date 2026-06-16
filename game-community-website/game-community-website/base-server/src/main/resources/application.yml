@@ -1,0 +1,123 @@
+# 文件说明：后端应用配置，集中维护端口、上传目录、Redis、支付和数据库等运行参数。
+server:
+  port: 9999
+  tomcat:
+    threads:
+      max: ${SERVER_TOMCAT_THREADS_MAX:400}
+      min-spare: ${SERVER_TOMCAT_THREADS_MIN_SPARE:40}
+    accept-count: ${SERVER_TOMCAT_ACCEPT_COUNT:1000}
+    max-connections: ${SERVER_TOMCAT_MAX_CONNECTIONS:10000}
+    connection-timeout: ${SERVER_TOMCAT_CONNECTION_TIMEOUT:20s}
+    max-swallow-size: 800MB
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml
+    min-response-size: 2KB
+  file:
+    upload-path: ${APP_UPLOAD_PATH:./files}
+    # 如果后续迁移到 Nginx 静态目录、CDN 或对象存储，可配置为对应公网前缀。
+    # 为空时仍返回项目内置的 /noLogin/common/img/{fileName}，保持兼容。
+    public-base-url: ${APP_FILE_PUBLIC_BASE_URL:}
+minimax:
+  # 兼容旧写法：这里可以直接填 MiniMax key。
+  # 一行切换模型：provider|model|key，例如 minimax|MiniMax-M2.7|sk-xxx、deepseek|deepseek-chat|sk-xxx。
+  # 自定义网关：custom|model|https://example.com/v1/chat/completions|sk-xxx。
+  key-line: ${MINIMAX_KEY_LINE:}
+  api-key: ${minimax.key-line}
+  api-url: ${MINIMAX_API_URL:https://api.minimaxi.com/v1/chat/completions}
+  model: ${MINIMAX_MODEL:MiniMax-M2.7}
+  max-completion-tokens: ${MINIMAX_MAX_COMPLETION_TOKENS:1024}
+spring:
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          socketFactory:
+            class: javax.net.ssl.SSLSocketFactory
+            port: ${MAIL_PORT:465}
+  redis:
+    host: ${REDIS_HOST:127.0.0.1}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: ${REDIS_POOL_MAX_ACTIVE:48}
+        max-idle: ${REDIS_POOL_MAX_IDLE:16}
+        min-idle: ${REDIS_POOL_MIN_IDLE:4}
+        max-wait: ${REDIS_POOL_MAX_WAIT:3000ms}
+  datasource:
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/gaming_db?characterEncoding=utf-8&useSSL=false&serverTimeZone=GMT&allowPublicKeyRetrieval=true}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:30}
+      minimum-idle: ${DB_POOL_MIN_IDLE:8}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:30000}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:600000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:1800000}
+      leak-detection-threshold: ${DB_POOL_LEAK_DETECTION:0}
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        rewriteBatchedStatements: true
+  servlet:
+    multipart:
+      max-file-size: 600MB
+      max-request-size: 800MB
+      file-size-threshold: 2MB
+# 支付宝支付相关参数
+# 应用ID,您的APPID，收款账号既是您的APPID对应支付宝账号
+alipay:
+  appid: ${ALIPAY_APPID:}
+  # 商户PID,卖家支付宝账号ID
+  seller-id: ${ALIPAY_SELLER_ID:}
+  # 支付宝网关
+  url: ${ALIPAY_GATEWAY:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+  # 商户私钥，您的PKCS8格式RSA2私钥
+  privateKey: ${ALIPAY_PRIVATE_KEY:}
+  # 支付宝公钥,查看地址：https://open.alipay.com/develop/sandbox/app
+  alipayPublicKey: ${ALIPAY_PUBLIC_KEY:}
+  # 接口内容加密秘钥，对称秘钥
+  content-key: ${ALIPAY_CONTENT_KEY:}
+  # 页面跳转同步通知页面路径
+  returnUrl: ${ALIPAY_RETURN_URL:http://localhost:5174/paymentResults}
+  # 服务器异步通知页面路径  需http://格式的完整路径，不能加?id=123这类自定义参数，必须外网可以正常访问
+  # 注意：每次重新启动，需要根据实际情况修改这个配置
+  notify-url: ${ALIPAY_NOTIFY_URL:http://localhost:9999/alipay/notify}
+  connect-timeout: 3000
+  read-timeout: 8000
+  max-idle-connections: 8
+  keep-alive-duration: 60
+security:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-me}
+app:
+  password-reset:
+    code-ttl-minutes: ${APP_PASSWORD_RESET_CODE_TTL_MINUTES:10}
+    resend-seconds: ${APP_PASSWORD_RESET_RESEND_SECONDS:60}
+    daily-limit: ${APP_PASSWORD_RESET_DAILY_LIMIT:10}
+  redisson:
+    lock-watchdog-timeout: ${REDIS_LOCK_WATCHDOG_TIMEOUT:30000}
+  content-review:
+    enabled: ${APP_CONTENT_REVIEW_ENABLED:true}
+    # 生产环境建议配置为独立词库或后台维护后注入，多个词用逗号分隔。
+    sensitive-words: ${APP_SENSITIVE_WORDS:赌博,诈骗,色情,违法交易,人身攻击}
+  performance:
+    auto-index: true
+    sql-log-enabled: ${APP_SQL_LOG_ENABLED:false}
+    upload-cache-seconds: ${APP_UPLOAD_CACHE_SECONDS:604800}
+    operation-log-async: ${APP_OPERATION_LOG_ASYNC:true}
+    operation-log-info-enabled: ${APP_OPERATION_LOG_INFO_ENABLED:false}
